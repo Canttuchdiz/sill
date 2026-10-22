@@ -112,7 +112,7 @@ check(DuoPosture.crease(size(669, 869), .known(rect(0, 373.5, 669, 40)))! == (37
 
 // MARK: - The halves' split (approved (b1) and (b2))
 
-let controls: CGFloat = 12 + 78 + 2 * 10 + 48 + 22     // PortraitMetrics.regular's controls but the trackpad: 180
+let controls: CGFloat = 180     // PortraitMetrics.regular's controls but the trackpad: 12 + 78 + 2 * 10 + 48 + 22
 check(controls == 180, "the regular halves' controls")
 // (b1) The laptop pose: the picture above the fold, the controls below it, in whole points.
 check(DuoPosture.portraitSplit(upright, .known(laptopFold), aspect: 1.6, controls: controls) == .init(picture: 455, controls: 496),
@@ -148,8 +148,10 @@ for w in stride(from: CGFloat(600), through: 800, by: 13) {
             // A fold anywhere across: never into it, whole points.
             let band = rect(0, (h / 2 - 20).rounded(.down) + 0.5, w, 40)
             let half = DuoPosture.portraitSplit(s, .known(band), aspect: aspect, controls: controls)
-            check(half.picture <= band.minY && half.controls >= band.maxY && half.picture == half.picture.rounded()
-                  && half.controls == half.controls.rounded() && half.controls - half.picture <= 41, "half-folded \(s)")
+            let avoidsFold = half.picture <= band.minY && half.controls >= band.maxY
+            let wholePoints = half.picture == half.picture.rounded() && half.controls == half.controls.rounded()
+            let narrowGap = half.controls - half.picture <= 41
+            check(avoidsFold && wholePoints && narrowGap, "half-folded \(s)")
         }
     }
 }

@@ -30,6 +30,12 @@ exit status is the number of checks that failed. Binaries, data and logs go to
 
 ## The checks
 
+The personal fork adds `locked-access`: Python standard-library checks for
+`Scripts/locked_access_probe.py`, including fragmented/malformed RFB discovery,
+bounded deadlines, safe output, cleanup, loopback reconnects and a stalled peer.
+It does not authenticate or prove access to a locked Mac; the live acceptance
+matrix is in `docs/PERSONAL-LOCKED-ACCESS.md`.
+
 | Check | Compiles | What it checks | Cases | Mutants |
 |---|---|---|---|---|
 | `addresses` | `Sources/SillHost/AddressList.swift`, `PairingWindow.swift` and `OriginPolicy.swift` with `Sources/StreamProtocol` (`build.sh`) | the addresses the Mac offers for remote access, from its services and tunnels; the pairing window's proofs, tries and back-off | 41 | 15 |
