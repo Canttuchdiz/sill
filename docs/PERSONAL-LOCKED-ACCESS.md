@@ -110,3 +110,83 @@ for the current iOS source. The successful Mac build does not verify the iOS bui
 Apple's documentation establishes available system services, not that an arbitrary
 RFB implementation meets this fork's lock-screen requirements. The feasibility
 test above remains a prerequisite to choosing that architecture.
+
+## First development checkpoint
+
+The owner approved enabling macOS Screen Sharing. The UI was verified with only
+the owner's user in the access list, public permission requests off, and
+password-only VNC off. No credentials were entered by the development tools.
+
+The service responded with `RFB 003.889` and security types `[30, 33, 36, 35]`.
+Type 30 is Apple ARD; types 33, 36 and 35 are preserved as numbers, without
+claiming their authentication or encryption semantics. The service does not
+advertise None (1) or password-only VNC (2).
+
+`Scripts/locked_access_probe.py` provides reproducible discovery:
+
+```sh
+python3 Scripts/locked_access_probe.py
+python3 Scripts/locked_access_probe.py --samples 12 --interval 5
+Tests/checks/run-all.sh locked-access
+```
+
+It connects only to `127.0.0.1:5900`, sends a protocol-version reply and closes
+before selecting authentication. It does not read screen pixels or take
+credentials. Each sample has a total operation deadline (including partial
+reads), bounded payloads and no internal retries. Sampling is sequential and
+limited to 120 attempts, with at least a second between completed attempts.
+The JSON explicitly reports that authentication and locked access are untested.
+Output contains no server-supplied error messages or device/user identifiers.
+
+Twenty automated tests cover all truncations of the Apple discovery reply,
+single-byte fragmentation, coalesced replies, 3.3/3.7/3.8/Apple version framing,
+unknown versions, malformed greetings, refusal, duplicate/invalid security types,
+maximum-size type lists, total-deadline enforcement, refusal versus network
+failure, cleanup, bounded CLI parameters, interruption, sequential sampling,
+a real stalled socket, and a loopback server accepting two fresh connections.
+The check is discovered automatically by the existing `run-all.sh` and CI.
+
+Local regression baseline: the full run covered 47 suites in 368 seconds; 46
+passed and `duo` hit Xcode 26.2's expression type-checking limit. After simplifying
+two test-only expressions, `duo` passed all 252,557 checks on its targeted rerun.
+The final expanded `locked-access` suite passed 20 tests. No production capture,
+authentication, network transport or input behavior has been changed yet. CI has
+not been verified for this fork. The app-control tool could not open the installed
+Sill host for a live reproduction; a host/phone session is still required.
+
+Six fresh connections to the actual local service succeeded: first discovery
+430.89 ms, subsequent discoveries 2.54–7.13 ms. These are local handshake timings,
+not authentication or video latency measurements. Authentication, lock-screen
+control, cellular/VPN reachability and Sill fallback integration remain unverified.
+
+The owner uses NordVPN Meshnet, not Tailscale. NordVPN's UI showed Meshnet on,
+the paired iPhone online, and remote access allowed in both directions. A stopped
+Tailscale installation is irrelevant to this setup. Preserve the existing Meshnet
+configuration and validate cellular reachability through it; no VPN migration is
+needed. NordVPN VPN-server connectivity and Meshnet connectivity are separate.
+
+## Acceptance and performance gates
+
+| Scenario | Expected result | Verification |
+| --- | --- | --- |
+| No client connected; lock; connect later | Authenticate and reach the intended session | Phone + real service; pending |
+| Phone on cellular with VPN | Same behavior as local connection | Phone + real network; pending |
+| Wrong/cancelled authentication | No desktop, no saved password, bounded retry | Real backend + integration; pending |
+| VPN absent or interrupted | Clear reachability error; cancellable reconnect with backoff | Fault injection + phone; pending |
+| Lock while viewing; repeated lock/unlock | Clear state, no stale live picture; source resumes if present | Integration; pending |
+| Window closes while locked | Recover to source selection without retrying a dead window | Integration; pending |
+| Device removed from paired list | New connections and active fallback lose access | Security integration; pending |
+| New unpaired device while locked | No automatic pairing or login fallback | Existing rules + integration; pending |
+| Display sleeps, system remains awake | Fresh reconnect still works | Real hardware; pending |
+| Lid closure, logout, reboot before FileVault unlock | Report unavailable; no claim of recovery | Real hardware; outside initial guarantee |
+| Fragmentation, EOF, malformed reply, slow peer | Bounded error, cleanup, no auth downgrade | Discovery tests pass |
+| Multiple clients or a late callback after disconnect | Session isolation; no cross-client input or credentials | Integration; pending |
+
+For an implemented backend, measure cold-connect/authentication time, first-frame
+time, input-to-visible-response latency, CPU, memory and bandwidth separately.
+Compare against the current host on the same device, window, resolution and VPN
+path. Idle/locked/disconnected states must have no polling spin, unbounded queues,
+or accumulating connections/tasks. A slow link must not grow a stale frame queue.
+Run a sustained session, repeated reconnections, and a throttled/dropped-link test
+before calling the feature ready. The protocol probe's timings cannot substitute
+for these measurements.
